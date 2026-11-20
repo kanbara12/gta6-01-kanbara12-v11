@@ -288,14 +288,14 @@ function placeCamera(mode) {
   const fwd = forwardVec();
   const right = rightVec();
   if (mode === 'wide') {
-    camera.position.set(-16, 26, 168);
-    camera.lookAt(-78, 6, 100);
+    camera.position.set(-34, 20, 152);
+    camera.lookAt(-76, 5, 102);
   } else if (mode === 'chase' || mode === 'chaseWide') {
-    const back = mode === 'chase' ? 7 : 11;
-    const side = mode === 'chase' ? 2.4 : 3.6;
-    const up = mode === 'chase' ? 2.8 : 5.2;
+    const back = mode === 'chase' ? 12 : 14;
+    const side = mode === 'chase' ? 2.0 : 3.0;
+    const up = mode === 'chase' ? 3.6 : 5.6;
     camera.position.copy(car).addScaledVector(fwd, -back).addScaledVector(right, side).add(new THREE.Vector3(0, up, 0));
-    camera.lookAt(car.clone().addScaledVector(fwd, 9).add(new THREE.Vector3(0, 1.2, 0)));
+    camera.lookAt(car.clone().addScaledVector(fwd, 4).add(new THREE.Vector3(0, 1.0, 0)));
   } else if (mode === 'foot') {
     const p = player.group.position;
     camera.position.copy(p).addScaledVector(forwardVec(), -4.6).addScaledVector(rightVec(), 1.3).add(new THREE.Vector3(0, 2.3, 0));
@@ -339,15 +339,22 @@ function applyShot(name) {
     if (st.heli) placeHeli(st.heliOff);
     if (name === 'chase') placeRoadblocks();
   } else if (name === 'mission') {
-    heading = Math.PI * 0.75;
-    player.group.position.set(MAP.yard.x - 22, 0, MAP.yard.z - 24);
+    // Open ground in the middle of the yard: player south, three hostiles in
+    // a loose arc ahead, containers and crates as the backdrop.
+    heading = 0; // facing north (+z) into the yard
+    player.group.position.set(MAP.yard.x, 0, MAP.yard.z - 18);
     player.group.rotation.y = heading;
     player.group.visible = true;
     S.driving = false;
     car.position.set(MAP.yard.x - 34, 0, MAP.yard.z + 30);
     car.rotation.y = heading;
     S.targetsDown = st.targets;
-    enemies.forEach((e) => { e.group.visible = true; });
+    const spots = [[-14, 18], [0, 26], [14, 18]];
+    enemies.forEach((e, i) => {
+      e.group.visible = true;
+      e.group.position.set(MAP.yard.x + spots[i][0], 0, MAP.yard.z + spots[i][1]);
+      e.group.rotation.y = Math.PI; // facing the player (south)
+    });
     enemies[1].hp = 0.4; enemies[1].drawBar(0.4); // mid-fight: centre hostile already hurt
     enemies[0].hp = 1; enemies[0].drawBar(1);
     enemies[2].hp = 0.85; enemies[2].drawBar(0.85);
@@ -368,18 +375,39 @@ function applyShot(name) {
   world.marker.position.set(markerPos().x, 0, markerPos().z);
 }
 function placePolice(st) {
-  // Police sit at the table's distances from the hero car, on the road.
+  // Police sit at the table's distances from the hero car, in slots the
+  // chase camera can actually see: the closest unit flanks just behind the
+  // camera line, the rest run ahead in the lanes.
   const car = hero.group.position;
+  const slots = [
+    { x: MAP.roadX + 4, relZ: 8 },   // 6 m behind, right flank, in frame
+    { x: MAP.roadX - 3.5, relZ: -16 },
+    { x: MAP.roadX + 3.5, relZ: -38 },
+    { x: MAP.roadX, relZ: -55 },
+  ];
   const rows = st.police.filter((r) => r.call !== 'AIR-1 SKY-1');
   rows.forEach((r, i) => {
     const p = policeCars[i];
-    const behind = i % 2 === 0;
-    p.position.set(
-      MAP.roadX + (behind ? -3.5 : 3.5) + (i === 2 ? 4 : 0),
-      0,
-      car.z + (behind ? r.d : -r.d - 6));
+    p.position.set(slots[i].x, 0, car.z + slots[i].relZ);
+    p.userData.relZ = slots[i].relZ;
+    p.userData.laneX = slots[i].x;
     p.rotation.y = heading;
     p.visible = true;
+  });
+  // 3+ traffic cars ahead, pinned to the hero car so they stay in frame.
+  const tSlots = [
+    { x: MAP.roadX - 3.5, relZ: -20 },
+    { x: MAP.roadX + 3.5, relZ: -32 },
+    { x: MAP.roadX - 3.5, relZ: -46 },
+    { x: MAP.roadX + 3.5, relZ: -60 },
+  ];
+  tSlots.forEach((s, i) => {
+    const tr = traffic[i];
+    tr.position.set(s.x, 0, car.z + s.relZ);
+    tr.rotation.y = heading;
+    tr.userData.staged = true;
+    tr.userData.relZ = s.relZ;
+    tr.userData.laneX = s.x;
   });
 }
 function placeHeli(off) {
@@ -401,6 +429,7 @@ function placeRoadblocks() {
   const car = hero.group.position;
   roadblocks.forEach((b, i) => {
     b.position.set(MAP.roadX - 4 + i * 4, 0.6, car.z - 46 - i * 3);
+    b.userData.relZ = -46 - i * 3;
     b.rotation.y = 0.15 * (i - 1);
     b.visible = true;
   });
@@ -435,11 +464,14 @@ function updateHud(dt) {
   for (let i = 0; i < 5; i++) stars += i < S.wanted ? '★' : '<span class="off">☆</span>';
   $('stars').innerHTML = stars;
   const policeOn = S.wanted > 0 || (shot && SHOTS[shotName].police.length > 0);
-  $('policeLine').textContent = policeOn ? 'POLICE: IN SIGHT' : 'POLICE: CLEAR';
+  $('policeLine').textContent = S.wanted > 0 ? 'POLICE: IN SIGHT'
+    : policeOn ? 'POLICE: RESPONDING' : 'POLICE: CLEAR';
   // Named police panel: live distances from the actual car positions.
+  // Suppressed when the staged list is empty (mission shot: no panel at all).
   const panel = $('police');
   const rows = $('policeRows');
-  if (policeOn) {
+  const stagedRows = shot ? SHOTS[shotName].police : null;
+  if (policeOn && !(stagedRows && stagedRows.length === 0)) {
     panel.classList.remove('hidden');
     const car = hero.group.position;
     let html = '';
@@ -609,15 +641,24 @@ function updateWorld(dt, t) {
     }
   }
   if (shot && (shotName === 'play' || shotName === 'chase')) {
-    // staged chase: the car keeps rolling up the beach road at staged speed
+    // staged chase: the car keeps rolling up the beach road at staged speed;
+    // police, staged traffic and roadblocks stay pinned to it.
     car.position.z -= S.speed * dt;
     if (car.position.z < -560) car.position.z = 560;
     car.rotation.y = heading;
-    for (let i = 0; i < policeCars.length; i++) {
-      const p = policeCars[i];
+    for (const p of policeCars) {
       if (!p.visible) continue;
-      p.position.z -= S.speed * dt * 0.98;
-      if (p.position.z < -560) p.position.z = 560;
+      p.position.z = car.position.z + p.userData.relZ;
+      p.position.x = p.userData.laneX;
+    }
+    for (const tr of traffic) {
+      if (!tr.userData.staged) continue;
+      tr.position.z = car.position.z + tr.userData.relZ;
+      tr.position.x = tr.userData.laneX;
+    }
+    for (const b of roadblocks) {
+      if (!b.visible) continue;
+      b.position.z = car.position.z + b.userData.relZ;
     }
     // keep the staged heli glued above the car
     if (heli.group.visible) {
@@ -627,20 +668,24 @@ function updateWorld(dt, t) {
       syncSpotlight();
     }
     S.speedKmh = S.speed * 3.6;
+    // the drift popup must still be on screen at capture time
+    if (shotName === 'chase' && Math.floor(S.playT / 2.5) !== Math.floor((S.playT - dt) / 2.5)) {
+      showPopup('DRIFT x3 +$150');
+    }
   }
   if (shotName === 'mission') {
-    // staged fire: a shot every ~1.4 s so the muzzle flash is live in frame
+    // staged fire: the muzzle flash stays lit so it is in the frame
+    player.flashMat.opacity = 0.95;
     if (t - lastShotT > 1.4) {
       lastShotT = t;
-      player.flashMat.opacity = 1;
       audio.gunshot();
-      setTimeout(() => { player.flashMat.opacity = 0; }, 110);
       const e = enemies[1];
       if (e.hp > 0.25) { e.hp = Math.max(0.25, e.hp - 0.05); e.drawBar(e.hp); }
     }
   }
-  // --- traffic loops along the road ---
+  // --- traffic loops along the road (staged cars are pinned to the hero car) ---
   for (const tr of traffic) {
+    if (tr.userData.staged) continue;
     tr.position.z += tr.userData.dir * tr.userData.speed * dt;
     if (tr.position.z > 620) tr.position.z = -620;
     if (tr.position.z < -620) tr.position.z = 620;

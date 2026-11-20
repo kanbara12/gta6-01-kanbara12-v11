@@ -58,11 +58,11 @@ export const SHOTS = {
   },
   play: {
     job: 2, cash: 3750, rep: 1, done: 1, wanted: 0, elapsed: 72, par: '1:30',
-    speed: 141, heli: true, heliOff: { x: -14, y: 12, z: -46 },
+    speed: 141, heli: true, heliOff: { x: -16, y: 13, z: -42 },
     police: [
-      { call: 'SNOOK-12', d: 6, st: 'RAMMING' },
-      { call: 'SNOOK-11', d: 14, st: 'PURSUIT' },
-      { call: 'SNOOK-13', d: 38, st: 'RESPONDING' },
+      { call: 'SNOOK-12', d: 6, st: 'RESPONDING' },
+      { call: 'SNOOK-11', d: 14, st: 'RESPONDING' },
+      { call: 'SNOOK-13', d: 38, st: 'EN ROUTE' },
       { call: 'AIR-1 SKY-1', d: 42, st: 'SPOTLIGHT' },
     ],
     dlg: { who: 'RAE', role: 'FIXER', text: 'Package is sealed and hot. Beach road, keep it above a hundred — I will talk you through the handoff.' },
@@ -70,7 +70,7 @@ export const SHOTS = {
   },
   chase: {
     job: 5, cash: 13200, rep: 5, done: 4, wanted: 3, elapsed: 129, par: '2:30',
-    speed: 152, heli: true, heliOff: { x: -10, y: 15, z: -52 },
+    speed: 152, heli: true, heliOff: { x: -12, y: 13.5, z: -46 },
     police: [
       { call: 'SNOOK-12', d: 6, st: 'RAMMING' },
       { call: 'SNOOK-11', d: 14, st: 'PURSUIT' },

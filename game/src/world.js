@@ -143,7 +143,7 @@ export function buildWorld(scene, seed) {
   // centre dashes
   const dashMat = new THREE.MeshBasicMaterial({ color: 0xd8c25a });
   for (let z = -620; z < 620; z += 14) {
-    const d = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 6), dashMat);
+    const d = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 4), dashMat);
     d.rotation.x = -Math.PI / 2;
     d.position.set(MAP.roadX, 0.4, z);
     scene.add(d);
@@ -221,10 +221,10 @@ export function buildWorld(scene, seed) {
       const fr = new THREE.Mesh(frondGeo, fm);
       const a = (f / 7) * Math.PI * 2 + rnd() * 0.5;
       fr.position.y = 7;
-      fr.rotation.set(0.5 + rnd() * 0.5, a, 0);
+      // Pivot at the crown, tilted outward-down so fronds droop, not stick out flat.
       fr.rotation.order = 'YXZ';
-      fr.rotateY(a);
-      fr.rotateX(1.05 + rnd() * 0.35);
+      fr.rotation.y = a;
+      fr.rotation.x = 0.85 + rnd() * 0.35;
       palm.add(fr);
     }
     palm.position.set(px, 0, pz);

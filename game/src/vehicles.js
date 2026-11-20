@@ -104,11 +104,11 @@ export function makeHeroCar() {
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.6, 0.3),
     new THREE.MeshStandardMaterial({ color: 0x2a4a8a, roughness: 0.8 }));
   torso.position.y = 0.3;
-  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10),
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10),
     new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.3 }));
-  helmet.position.y = 0.78;
+  helmet.position.y = 0.72;
   driver.add(torso, helmet);
-  driver.position.set(-0.35, 0.85, -0.55);
+  driver.position.set(-0.35, 0.62, -0.55);
   car.add(driver);
   parts.driver = driver;
 
@@ -265,16 +265,16 @@ export function makePlayer() {
   // Pistol held out in front of the right hand, big enough to read on camera.
   const pistol = new THREE.Group();
   const gunMetal = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.3, metalness: 0.8 });
-  const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.55), gunMetal);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.3, 0.12), gunMetal);
-  grip.position.set(0, -0.16, -0.18);
+  const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.7), gunMetal);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.34, 0.14), gunMetal);
+  grip.position.set(0, -0.18, -0.22);
   pistol.add(barrel, grip);
-  pistol.position.set(0.38, 1.28, 0.62);
+  pistol.position.set(0.46, 1.28, 0.72);
   // Muzzle flash: a bright star that pops for a few frames on each shot.
   const flashMat = new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0 });
-  const flash = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.7, 6), flashMat);
+  const flash = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.95, 6), flashMat);
   flash.rotation.x = Math.PI / 2;
-  flash.position.set(0.38, 1.28, 1.05);
+  flash.position.set(0.46, 1.28, 1.2);
   g.add(torso, head, cap, armR, armL, legL, legR, pistol, flash);
   return { group: g, pistol, flash, flashMat, legL, legR };
 }
