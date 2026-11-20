@@ -296,14 +296,14 @@ function placeCamera(mode) {
     const up = mode === 'chase' ? 3.2 : 5.6;
     camera.position.copy(car).addScaledVector(fwd, -back).addScaledVector(right, side).add(new THREE.Vector3(0, up, 0));
     // Pan the view toward the ocean (west) so the water is in the frame.
-    camera.lookAt(car.clone().addScaledVector(fwd, 4).addScaledVector(right, -5).add(new THREE.Vector3(0, 1.0, 0)));
+    camera.lookAt(car.clone().addScaledVector(fwd, 4).addScaledVector(right, -8).add(new THREE.Vector3(0, 1.0, 0)));
   } else if (mode === 'foot') {
     const p = player.group.position;
     camera.position.copy(p).addScaledVector(forwardVec(), -4.6).addScaledVector(rightVec(), 2.0).add(new THREE.Vector3(0, 2.3, 0));
     camera.lookAt(p.clone().addScaledVector(forwardVec(), 12).add(new THREE.Vector3(0, 1.2, 0)));
   } else if (mode === 'lighthouse') {
-    camera.position.set(-108, 9, -408);
-    camera.lookAt(-146, 7, -468);
+    camera.position.set(-30, 9, -400);
+    camera.lookAt(-100, 8, -470);
   } else {
     // live chase camera
     camera.position.copy(car).addScaledVector(fwd, -7).addScaledVector(right, 2.4).add(new THREE.Vector3(0, 2.8, 0));
@@ -350,7 +350,7 @@ function applyShot(name) {
     car.position.set(MAP.yard.x - 34, 0, MAP.yard.z + 30);
     car.rotation.y = heading;
     S.targetsDown = st.targets;
-    const spots = [[-14, -23], [0, -21], [14, -23]];
+    const spots = [[-11, -23], [0, -21], [11, -23]];
     enemies.forEach((e, i) => {
       e.group.visible = true;
       e.group.position.set(MAP.yard.x + spots[i][0], 0, MAP.yard.z + spots[i][1]);
@@ -361,9 +361,9 @@ function applyShot(name) {
     enemies[2].hp = 0.85; enemies[2].drawBar(0.85);
   } else if (name === 'end') {
     heading = Math.PI;
-    car.position.set(-138, 0, -448);
+    car.position.set(-70, 0, -448);
     car.rotation.y = heading;
-    player.group.position.set(-133, 0, -448);
+    player.group.position.set(-65, 0, -448);
     player.group.rotation.y = heading;
     player.group.visible = true;
     S.driving = false;
@@ -381,8 +381,8 @@ function placePolice(st) {
   // camera line, the rest run ahead in the lanes.
   const car = hero.group.position;
   const slots = [
-    { x: MAP.roadX + 3.5, relZ: -10 },  // closest unit, ahead-right, in frame
-    { x: MAP.roadX - 3.5, relZ: -16 },
+    { x: MAP.roadX - 8, relZ: -12 },  // closest unit, ahead-left, in frame
+    { x: MAP.roadX + 3.5, relZ: -24 },
     { x: MAP.roadX + 3.5, relZ: -38 },
     { x: MAP.roadX, relZ: -55 },
   ];
@@ -520,8 +520,8 @@ function drawMinimap() {
   g.save();
   g.beginPath(); g.arc(75, 75, 74, 0, 7); g.clip();
   const toMap = (x, z) => [75 + (x / 600) * 72, 75 + (z / 600) * 72];
-  g.fillStyle = '#1d4e6e'; g.fillRect(0, 0, 22, 150); // ocean strip
-  g.fillStyle = '#d9b380'; g.fillRect(20, 0, 8, 150); // sand
+  g.fillStyle = '#1d4e6e'; g.fillRect(0, 0, 61, 150); // ocean strip
+  g.fillStyle = '#d9b380'; g.fillRect(61, 0, 6, 150); // sand
   g.strokeStyle = '#666'; g.lineWidth = 4;
   g.beginPath(); g.moveTo(...toMap(MAP.roadX, -600)); g.lineTo(...toMap(MAP.roadX, 600)); g.stroke();
   g.strokeStyle = '#555'; g.lineWidth = 3;

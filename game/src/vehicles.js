@@ -201,11 +201,11 @@ export function makeHeli() {
   // Spotlight cone hanging below, and the pool it throws on the road.
   const cone = new THREE.Mesh(
     new THREE.ConeGeometry(4.5, 13, 20, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+    new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
   cone.position.y = -6.9; // apex up at the heli, wide end down at the road
   g.add(cone);
   const pool = new THREE.Mesh(new THREE.CircleGeometry(4.2, 24),
-    new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.5, depthWrite: false }));
+    new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.65, depthWrite: false }));
   pool.rotation.x = -Math.PI / 2;
   pool.position.y = -13.4;
   g.add(pool);
@@ -282,7 +282,7 @@ export function makePlayer() {
   const flashTex = new THREE.CanvasTexture(flashC);
   const flashMat = new THREE.SpriteMaterial({ map: flashTex, transparent: true, opacity: 0, depthWrite: false });
   const flash = new THREE.Sprite(flashMat);
-  flash.scale.set(1.5, 1.5, 1);
+  flash.scale.set(0.9, 0.9, 1);
   flash.position.set(0.46, 1.28, 1.25);
   g.add(torso, head, cap, armR, armL, legL, legR, pistol, flash);
   return { group: g, pistol, flash, flashMat, legL, legR };

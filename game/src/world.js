@@ -101,7 +101,7 @@ export function buildWorld(scene, seed) {
   oceanGeo.rotateX(-Math.PI / 2);
   const oceanMat = new THREE.MeshStandardMaterial({ color: 0x1d4e6e, roughness: 0.25, metalness: 0.55 });
   const ocean = new THREE.Mesh(oceanGeo, oceanMat);
-  ocean.position.set(-490, 0.4, 0);
+  ocean.position.set(-465, 0.4, 0);
   scene.add(ocean);
   out.ocean = ocean;
   out.oceanBase = oceanGeo.attributes.position.array.slice();
@@ -117,7 +117,7 @@ export function buildWorld(scene, seed) {
     new THREE.PlaneGeometry(280, 70),
     new THREE.MeshBasicMaterial({ map: glitterTex, transparent: true, opacity: 0.55, depthWrite: false }));
   glitter.rotation.x = -Math.PI / 2;
-  glitter.position.set(-280, 0.55, -60);
+  glitter.position.set(-230, 0.55, -60);
   scene.add(glitter);
   const foamTex = canvasTex(64, 256, (g, w, h) => {
     g.clearRect(0, 0, w, h);
@@ -130,16 +130,16 @@ export function buildWorld(scene, seed) {
     new THREE.PlaneGeometry(14, 1300),
     new THREE.MeshBasicMaterial({ map: foamTex, transparent: true, opacity: 0.85, depthWrite: false }));
   foam.rotation.x = -Math.PI / 2;
-  foam.position.set(MAP.shoreX - 6, 0.7, 0);
+  foam.position.set(MAP.waterX + 4, 0.7, 0);
   scene.add(foam);
   out.foam = foam;
 
-  // ---- sand ----
+  // ---- sand: the strip between the waterline and the beach road ----
   const sand = new THREE.Mesh(
-    new THREE.PlaneGeometry(90, 1300),
+    new THREE.PlaneGeometry(MAP.shoreX - MAP.waterX + 6, 1300),
     new THREE.MeshStandardMaterial({ color: 0xd9b380, roughness: 1 }));
   sand.rotation.x = -Math.PI / 2;
-  sand.position.set(MAP.shoreX - 45 + 22, 0.2, 0);
+  sand.position.set((MAP.shoreX + MAP.waterX) / 2, 0.2, 0);
   scene.add(sand);
 
   // ---- ground + beach road + cross streets ----
@@ -220,7 +220,7 @@ export function buildWorld(scene, seed) {
     new THREE.MeshStandardMaterial({ color: c, roughness: 0.9, side: THREE.DoubleSide }));
   const palmSpots = [];
   for (let z = -600; z <= 600; z += 26) {
-    palmSpots.push([MAP.shoreX + 8, z + (rnd() - 0.5) * 8]);
+    palmSpots.push([MAP.shoreX - 8, z + (rnd() - 0.5) * 8]);
     palmSpots.push([MAP.roadX - 12, z + 13 + (rnd() - 0.5) * 6]);
     if (rnd() < 0.5) palmSpots.push([MAP.roadX + 12, z + 6 + (rnd() - 0.5) * 8]);
   }

@@ -8,14 +8,14 @@ export const MAP = {
   // beach road running north-south between them.
   size: 1200,
   roadX: -60,        // beach road centreline (runs along z)
-  shoreX: -95,       // sand starts here
-  waterX: -140,      // ocean starts here
+  shoreX: -80,       // sand starts here
+  waterX: -115,      // ocean starts here
   yard: { x: 140, z: 150 },       // industrial container yard (job 4)
   garage: { x: -20, z: 260 },     // lose-the-heat garage (job 5)
   safehouse: { x: 60, z: -240 },
-  marina: { x: -140, z: 420 },    // case swap (job 7)
-  lighthouse: { x: -150, z: -480 }, // loop end (job 8)
-  pier: { x: -150, z: 60 },
+  marina: { x: -100, z: 420 },    // case swap (job 7)
+  lighthouse: { x: -105, z: -480 }, // loop end (job 8)
+  pier: { x: -130, z: 60 },
   playerSpawn: { x: -60, z: -40 },
   carSpawn: { x: -52, z: -40 },
   marker1: { x: -60, z: 4 },      // ~44 m from both spawns: no instant trigger
@@ -58,7 +58,7 @@ export const SHOTS = {
   },
   play: {
     job: 2, cash: 3750, rep: 1, done: 1, wanted: 0, elapsed: 72, par: '1:30',
-    speed: 141, heli: true, heliOff: { x: -16, y: 13, z: -42 },
+    speed: 141, heli: true, heliOff: { x: -8, y: 13, z: -38 },
     police: [
       { call: 'SNOOK-12', d: 6, st: 'RESPONDING' },
       { call: 'SNOOK-11', d: 14, st: 'RESPONDING' },
@@ -70,7 +70,7 @@ export const SHOTS = {
   },
   chase: {
     job: 5, cash: 13200, rep: 5, done: 4, wanted: 3, elapsed: 129, par: '2:30',
-    speed: 152, heli: true, heliOff: { x: -12, y: 13.5, z: -46 },
+    speed: 152, heli: true, heliOff: { x: -6, y: 13.5, z: -40 },
     police: [
       { call: 'SNOOK-12', d: 6, st: 'RAMMING' },
       { call: 'SNOOK-11', d: 14, st: 'PURSUIT' },
