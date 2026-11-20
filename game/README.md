@@ -7,7 +7,7 @@ is vendored locally at `game/vendor/three.module.min.js`. Entry point
 ## Layout
 
 - `game/src/config.js`: tuning, the 8-mission economy, REP and wanted
-  progression, and the screenshot staging table — one source of truth for
+  progression, and the screenshot staging table, one source of truth for
   every HUD value in every submitted frame.
 - `game/src/world.js`: sunset sky with sun disc and halo, soft clouds, the
   animated ocean and foam line, beach and boardwalk, 190+ buildings with lit
@@ -22,7 +22,7 @@ is vendored locally at `game/vendor/three.module.min.js`. Entry point
   mission state machine, police pursuit, pedestrians that scatter, on-foot
   combat, the HUD with minimap, pause and save, and the `?shot=`
   screenshot staging.
-- `game/src/audio.js`: WebAudio synth — engine, gunfire, pickups and three
+- `game/src/audio.js`: WebAudio synth, engine, gunfire, pickups and three
   original radio stations (SHORELINE 96.7, PIER 102.5, DUNE 89.9).
 - `game/index.html`: canvas plus the full HUD: mission panel, money and
   status, named police panel, radio and weapons, speedometer, round

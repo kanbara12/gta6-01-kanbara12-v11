@@ -233,13 +233,23 @@ function completeJob() {
   const j = job();
   S.cash += j.pay;
   S.done = S.job;
-  S.rep = REP_DURING[Math.min(S.job, 8) - 1] + (S.job >= 4 ? 1 : 0);
-  if (S.job === 8) { S.rep = REP_END; S.complete = true; }
-  S.wanted = WANTED_DURING[Math.min(S.job, 8) - 1];
   audio.pickup();
-  toast(`+$${j.pay.toLocaleString('en-US')} — JOB ${S.job + 1 <= 8 ? S.job + 1 : 8}/8 ${S.job + 1 <= 8 ? JOBS[S.job].title : 'LOOP COMPLETE'}`);
-  if (S.job < 8) { S.job++; S.elapsed = 0; S.targetsDown = 0; }
-  else { showDialog('RAE', 'FIXER', 'Loop closed. Twenty-two four-fifty, clean. Suncoast is ours tonight.'); }
+  if (S.job < 8) {
+    const next = JOBS[S.job];
+    toast(`+$${j.pay.toLocaleString('en-US')} — JOB ${next.n}/8 ${next.title}`);
+    S.job++;
+    // REP and wanted are read for the NEW job: REP_DURING / WANTED_DURING
+    // are indexed by job-1 and already include the yard bonus from job 4.
+    S.rep = REP_DURING[S.job - 1];
+    S.wanted = WANTED_DURING[S.job - 1];
+    S.elapsed = 0;
+    S.targetsDown = 0;
+  } else {
+    S.rep = REP_END;
+    S.complete = true;
+    toast(`+$${j.pay.toLocaleString('en-US')} — LOOP COMPLETE`);
+    showDialog('RAE', 'FIXER', 'Loop closed. Twenty-two four-fifty, clean. Suncoast is ours tonight.');
+  }
 }
 function checkMarker() {
   const m = markerPos();
