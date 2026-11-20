@@ -84,7 +84,7 @@ const walkers = [];
   const cols = [0xd8d8d8, 0x3a6ea8, 0xc85a5a, 0x5aa87a, 0xe0c85a, 0x8a5ac8];
   for (let i = 0; i < 20; i++) {
     const w = makeWalker(cols[i % cols.length]);
-    const side = rnd() < 0.5 ? MAP.roadX - 8 : MAP.roadX + 8;
+    const side = rnd() < 0.5 ? MAP.roadX - 12 : MAP.roadX + 12;
     w.group.position.set(side + (rnd() - 0.5) * 3, 0, -560 + rnd() * 1120);
     w.group.userData = { dir: rnd() < 0.5 ? 1 : -1, speed: 1 + rnd() * 1.2, phase: rnd() * 6, homeX: w.group.position.x };
     scene.add(w.group);
@@ -291,9 +291,9 @@ function placeCamera(mode) {
     camera.position.set(-34, 20, 152);
     camera.lookAt(-76, 5, 102);
   } else if (mode === 'chase' || mode === 'chaseWide') {
-    const back = mode === 'chase' ? 12 : 14;
+    const back = mode === 'chase' ? 12 : 12;
     const side = mode === 'chase' ? 3.2 : 3.6;
-    const up = mode === 'chase' ? 3.2 : 5.6;
+    const up = mode === 'chase' ? 3.2 : 5.0;
     camera.position.copy(car).addScaledVector(fwd, -back).addScaledVector(right, side).add(new THREE.Vector3(0, up, 0));
     // Pan the view toward the ocean (west) so the water is in the frame.
     camera.lookAt(car.clone().addScaledVector(fwd, 4).addScaledVector(right, -8).add(new THREE.Vector3(0, 1.0, 0)));
@@ -668,6 +668,8 @@ function updateWorld(dt, t) {
       heli.group.position.y = Math.max(SHOTS[shotName].heliOff.y, 14);
       syncSpotlight();
     }
+    // sun glitter follows the car so the water reads in the chase frames
+    world.glitter.position.z = car.position.z - 10;
     S.speedKmh = S.speed * 3.6;
     // the drift popup must still be on screen at capture time: re-show it
     // on wall-clock time, since game time runs slower than real time here

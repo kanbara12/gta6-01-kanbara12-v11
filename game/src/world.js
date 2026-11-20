@@ -99,7 +99,7 @@ export function buildWorld(scene, seed) {
   // ---- ocean: animated plane + foam strip at the waterline ----
   const oceanGeo = new THREE.PlaneGeometry(700, 1300, 40, 60);
   oceanGeo.rotateX(-Math.PI / 2);
-  const oceanMat = new THREE.MeshStandardMaterial({ color: 0x1d4e6e, roughness: 0.25, metalness: 0.55 });
+  const oceanMat = new THREE.MeshStandardMaterial({ color: 0x27678f, roughness: 0.25, metalness: 0.55 });
   const ocean = new THREE.Mesh(oceanGeo, oceanMat);
   ocean.position.set(-465, 0.4, 0);
   scene.add(ocean);
@@ -119,6 +119,7 @@ export function buildWorld(scene, seed) {
   glitter.rotation.x = -Math.PI / 2;
   glitter.position.set(-230, 0.55, -60);
   scene.add(glitter);
+  out.glitter = glitter;
   const foamTex = canvasTex(64, 256, (g, w, h) => {
     g.clearRect(0, 0, w, h);
     for (let i = 0; i < 90; i++) {

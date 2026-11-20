@@ -200,12 +200,12 @@ export function makeHeli() {
   g.add(rotor);
   // Spotlight cone hanging below, and the pool it throws on the road.
   const cone = new THREE.Mesh(
-    new THREE.ConeGeometry(4.5, 13, 20, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }));
+    new THREE.ConeGeometry(3.2, 13, 20, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xfff6c0, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }));
   cone.position.y = -6.9; // apex up at the heli, wide end down at the road
   g.add(cone);
-  const pool = new THREE.Mesh(new THREE.CircleGeometry(4.2, 24),
-    new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.65, depthWrite: false }));
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(3.2, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.55, depthWrite: false }));
   pool.rotation.x = -Math.PI / 2;
   pool.position.y = -13.4;
   g.add(pool);
