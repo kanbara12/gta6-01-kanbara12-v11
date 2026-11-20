@@ -101,10 +101,24 @@ export function buildWorld(scene, seed) {
   oceanGeo.rotateX(-Math.PI / 2);
   const oceanMat = new THREE.MeshStandardMaterial({ color: 0x1d4e6e, roughness: 0.25, metalness: 0.55 });
   const ocean = new THREE.Mesh(oceanGeo, oceanMat);
-  ocean.position.set(-520, 0.4, 0);
+  ocean.position.set(-490, 0.4, 0);
   scene.add(ocean);
   out.ocean = ocean;
   out.oceanBase = oceanGeo.attributes.position.array.slice();
+  // Sun glitter: a warm streak on the water running toward the low sun.
+  const glitterTex = canvasTex(256, 64, (g, w, h) => {
+    const grad = g.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0, 'rgba(255,150,60,0)');
+    grad.addColorStop(0.55, 'rgba(255,180,90,0.35)');
+    grad.addColorStop(1, 'rgba(255,210,130,0.85)');
+    g.fillStyle = grad; g.fillRect(0, 0, w, h);
+  });
+  const glitter = new THREE.Mesh(
+    new THREE.PlaneGeometry(280, 70),
+    new THREE.MeshBasicMaterial({ map: glitterTex, transparent: true, opacity: 0.55, depthWrite: false }));
+  glitter.rotation.x = -Math.PI / 2;
+  glitter.position.set(-280, 0.55, -60);
+  scene.add(glitter);
   const foamTex = canvasTex(64, 256, (g, w, h) => {
     g.clearRect(0, 0, w, h);
     for (let i = 0; i < 90; i++) {
@@ -349,11 +363,17 @@ export function buildWorld(scene, seed) {
     yard.add(cr);
   }
   const fenceMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.7, metalness: 0.6 });
-  for (const [fx, fz, w, d] of [[0, -26, 52, 0.4], [0, 26, 52, 0.4], [-26, 0, 0.4, 52], [26, 0, 0.4, 52]]) {
+  // Tall fences on the north, east and west sides only.
+  for (const [fx, fz, w, d] of [[0, 26, 52, 0.4], [-26, 0, 0.4, 52], [26, 0, 0.4, 52]]) {
     const f = new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), fenceMat);
     f.position.set(fx, 1.5, fz);
     yard.add(f);
   }
+  // Low south barrier instead of a tall fence: the yard entrance stays open
+  // so a camera south of the yard can see in over it.
+  const gate = new THREE.Mesh(new THREE.BoxGeometry(52, 1.1, 0.4), fenceMat);
+  gate.position.set(0, 0.55, -27);
+  yard.add(gate);
   yard.position.set(MAP.yard.x, 0, MAP.yard.z);
   scene.add(yard);
   out.yard = yard;

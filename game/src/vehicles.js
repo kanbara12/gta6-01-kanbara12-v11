@@ -264,17 +264,26 @@ export function makePlayer() {
   legR.position.x = 0.16;
   // Pistol held out in front of the right hand, big enough to read on camera.
   const pistol = new THREE.Group();
-  const gunMetal = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.3, metalness: 0.8 });
+  const gunMetal = new THREE.MeshStandardMaterial({ color: 0x777788, roughness: 0.35, metalness: 0.8 });
   const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.7), gunMetal);
   const grip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.34, 0.14), gunMetal);
   grip.position.set(0, -0.18, -0.22);
   pistol.add(barrel, grip);
   pistol.position.set(0.46, 1.28, 0.72);
-  // Muzzle flash: a bright star that pops for a few frames on each shot.
-  const flashMat = new THREE.MeshBasicMaterial({ color: 0xffe27a, transparent: true, opacity: 0 });
-  const flash = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.95, 6), flashMat);
-  flash.rotation.x = Math.PI / 2;
-  flash.position.set(0.46, 1.28, 1.2);
+  // Muzzle flash: a glowing ball at the barrel tip — reads from any angle.
+  const flashC = document.createElement('canvas');
+  flashC.width = flashC.height = 64;
+  const fg = flashC.getContext('2d');
+  const fr = fg.createRadialGradient(32, 32, 2, 32, 32, 30);
+  fr.addColorStop(0, 'rgba(255,240,170,1)');
+  fr.addColorStop(0.4, 'rgba(255,200,80,0.9)');
+  fr.addColorStop(1, 'rgba(255,150,40,0)');
+  fg.fillStyle = fr; fg.fillRect(0, 0, 64, 64);
+  const flashTex = new THREE.CanvasTexture(flashC);
+  const flashMat = new THREE.SpriteMaterial({ map: flashTex, transparent: true, opacity: 0, depthWrite: false });
+  const flash = new THREE.Sprite(flashMat);
+  flash.scale.set(1.5, 1.5, 1);
+  flash.position.set(0.46, 1.28, 1.25);
   g.add(torso, head, cap, armR, armL, legL, legR, pistol, flash);
   return { group: g, pistol, flash, flashMat, legL, legR };
 }

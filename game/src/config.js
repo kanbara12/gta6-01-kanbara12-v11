@@ -8,8 +8,8 @@ export const MAP = {
   // beach road running north-south between them.
   size: 1200,
   roadX: -60,        // beach road centreline (runs along z)
-  shoreX: -110,      // sand starts here
-  waterX: -170,      // ocean starts here
+  shoreX: -95,       // sand starts here
+  waterX: -140,      // ocean starts here
   yard: { x: 140, z: 150 },       // industrial container yard (job 4)
   garage: { x: -20, z: 260 },     // lose-the-heat garage (job 5)
   safehouse: { x: 60, z: -240 },

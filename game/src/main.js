@@ -292,13 +292,14 @@ function placeCamera(mode) {
     camera.lookAt(-76, 5, 102);
   } else if (mode === 'chase' || mode === 'chaseWide') {
     const back = mode === 'chase' ? 12 : 14;
-    const side = mode === 'chase' ? 2.0 : 3.0;
-    const up = mode === 'chase' ? 3.6 : 5.6;
+    const side = mode === 'chase' ? 3.2 : 3.6;
+    const up = mode === 'chase' ? 3.2 : 5.6;
     camera.position.copy(car).addScaledVector(fwd, -back).addScaledVector(right, side).add(new THREE.Vector3(0, up, 0));
-    camera.lookAt(car.clone().addScaledVector(fwd, 4).add(new THREE.Vector3(0, 1.0, 0)));
+    // Pan the view toward the ocean (west) so the water is in the frame.
+    camera.lookAt(car.clone().addScaledVector(fwd, 4).addScaledVector(right, -5).add(new THREE.Vector3(0, 1.0, 0)));
   } else if (mode === 'foot') {
     const p = player.group.position;
-    camera.position.copy(p).addScaledVector(forwardVec(), -4.6).addScaledVector(rightVec(), 1.3).add(new THREE.Vector3(0, 2.3, 0));
+    camera.position.copy(p).addScaledVector(forwardVec(), -4.6).addScaledVector(rightVec(), 2.0).add(new THREE.Vector3(0, 2.3, 0));
     camera.lookAt(p.clone().addScaledVector(forwardVec(), 12).add(new THREE.Vector3(0, 1.2, 0)));
   } else if (mode === 'lighthouse') {
     camera.position.set(-108, 9, -408);
@@ -339,17 +340,17 @@ function applyShot(name) {
     if (st.heli) placeHeli(st.heliOff);
     if (name === 'chase') placeRoadblocks();
   } else if (name === 'mission') {
-    // Open ground in the middle of the yard: player south, three hostiles in
-    // a loose arc ahead, containers and crates as the backdrop.
+    // Open ground at the yard entrance: player just outside the gate, three
+    // hostiles in a loose arc ahead, the container rows as the backdrop.
     heading = 0; // facing north (+z) into the yard
-    player.group.position.set(MAP.yard.x, 0, MAP.yard.z - 18);
+    player.group.position.set(MAP.yard.x, 0, MAP.yard.z - 34);
     player.group.rotation.y = heading;
     player.group.visible = true;
     S.driving = false;
     car.position.set(MAP.yard.x - 34, 0, MAP.yard.z + 30);
     car.rotation.y = heading;
     S.targetsDown = st.targets;
-    const spots = [[-14, 18], [0, 26], [14, 18]];
+    const spots = [[-14, -23], [0, -21], [14, -23]];
     enemies.forEach((e, i) => {
       e.group.visible = true;
       e.group.position.set(MAP.yard.x + spots[i][0], 0, MAP.yard.z + spots[i][1]);
@@ -380,7 +381,7 @@ function placePolice(st) {
   // camera line, the rest run ahead in the lanes.
   const car = hero.group.position;
   const slots = [
-    { x: MAP.roadX + 4, relZ: 8 },   // 6 m behind, right flank, in frame
+    { x: MAP.roadX + 3.5, relZ: -10 },  // closest unit, ahead-right, in frame
     { x: MAP.roadX - 3.5, relZ: -16 },
     { x: MAP.roadX + 3.5, relZ: -38 },
     { x: MAP.roadX, relZ: -55 },
@@ -668,8 +669,9 @@ function updateWorld(dt, t) {
       syncSpotlight();
     }
     S.speedKmh = S.speed * 3.6;
-    // the drift popup must still be on screen at capture time
-    if (shotName === 'chase' && Math.floor(S.playT / 2.5) !== Math.floor((S.playT - dt) / 2.5)) {
+    // the drift popup must still be on screen at capture time: re-show it
+    // on wall-clock time, since game time runs slower than real time here
+    if (shotName === 'chase' && Math.floor(t / 2.5) !== Math.floor((t - dt) / 2.5)) {
       showPopup('DRIFT x3 +$150');
     }
   }
