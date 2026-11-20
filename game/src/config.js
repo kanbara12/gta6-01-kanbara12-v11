@@ -17,7 +17,7 @@ export const MAP = {
   lighthouse: { x: -105, z: -480 }, // loop end (job 8)
   pier: { x: -130, z: 60 },
   playerSpawn: { x: -60, z: -40 },
-  carSpawn: { x: -52, z: -40 },
+  carSpawn: { x: -56, z: -40 },    // 4 m from the player: E works at spawn
   marker1: { x: -60, z: 4 },      // ~44 m from both spawns: no instant trigger
 };
 

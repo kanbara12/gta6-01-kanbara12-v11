@@ -206,7 +206,7 @@ function tryEnterExit() {
     player.group.position.copy(hero.group.position).add(new THREE.Vector3(2.5, 0, 0));
     player.group.rotation.y = heading;
     player.group.visible = true;
-  } else if (hero.group.position.distanceTo(player.group.position) < 6) {
+  } else if (hero.group.position.distanceTo(player.group.position) < 8) {
     S.driving = true;
     player.group.visible = false;
     toast('HEATLINE GT — COND ' + Math.round(S.cond) + '%');
