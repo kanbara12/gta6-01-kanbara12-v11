@@ -70,7 +70,7 @@ export const SHOTS = {
   },
   chase: {
     job: 5, cash: 13200, rep: 5, done: 4, wanted: 3, elapsed: 129, par: '2:30',
-    speed: 152, heli: true, heliOff: { x: 2, y: 13.5, z: -28 },
+    speed: 152, heli: true, heliOff: { x: 24, y: 13.5, z: -6 },
     police: [
       { call: 'SNOOK-12', d: 6, st: 'RAMMING' },
       { call: 'SNOOK-11', d: 14, st: 'PURSUIT' },
@@ -80,7 +80,13 @@ export const SHOTS = {
     ],
     dlg: { who: 'SABLE', role: 'LOOKOUT', text: 'EYES UP — roadblock two streets ahead, heli is painting you. Cut through the marina lane, now.' },
     popup: 'DRIFT x3 +$150', cam: 'chaseWide',
-    note: 'DUSK downtown pursuit, heli dominant, drift popup',
+    note: 'DUSK downtown pursuit on Ocean Ave, heli dominant, drift popup',
+    // Downtown staging (fix round: shot 3 must read as a DIFFERENT district
+    // from shot 2's beach road): east along the Ocean Ave cross street
+    // (z=180) through the neon towers. Start mid-downtown so the slow
+    // SwiftShader capture (~55 m of staged roll in the 12 s wait) still
+    // lands among the towers, never over the sand west of the beach road.
+    heading: Math.PI / 2, startX: 40, startZ: 180,
   },
   mission: {
     job: 4, cash: 9550, rep: 4, done: 3, wanted: 2, elapsed: 151, par: '3:00',

@@ -303,13 +303,19 @@ function placeCamera(mode) {
     camera.lookAt(-76, 5, 102);
   } else if (mode === 'chase' || mode === 'chaseWide') {
     const back = mode === 'chase' ? 12 : 12;
-    const side = mode === 'chase' ? 3.2 : 3.6;
+    // chaseWide sits further to the side so the hero car reads rear 3/4
+    // (length visible, not just the rear) while staying whole in frame.
+    const side = mode === 'chase' ? 3.2 : 6.0;
     const up = mode === 'chase' ? 3.2 : 5.0;
     camera.position.copy(car).addScaledVector(fwd, -back).addScaledVector(right, side).add(new THREE.Vector3(0, up, 0));
-    // Pan the view toward the ocean (west) so the water is in the frame.
+    // Pan the view toward the ocean (west) so the water is in the frame —
+    // but only for the beach-road chase cam. chaseWide (shot 3) pans almost
+    // straight ahead: the old pan of 6 pushed the hero car half out of the
+    // right edge of the frame (v10 defect, repeated in v11 shot 3).
     // Note the sign: for heading PI (north), rightVec points west, so a
     // positive right offset pans the view west.
-    camera.lookAt(car.clone().addScaledVector(fwd, 10).addScaledVector(right, 6).add(new THREE.Vector3(0, 1.0, 0)));
+    const pan = mode === 'chaseWide' ? 2.0 : 6;
+    camera.lookAt(car.clone().addScaledVector(fwd, 10).addScaledVector(right, pan).add(new THREE.Vector3(0, 1.0, 0)));
   } else if (mode === 'foot') {
     const p = player.group.position;
     camera.position.copy(p).addScaledVector(forwardVec(), -4.6).addScaledVector(rightVec(), 2.0).add(new THREE.Vector3(0, 2.3, 0));
@@ -344,8 +350,11 @@ function applyShot(name) {
     S.driving = true;
     player.group.visible = false;
   } else if (name === 'play' || name === 'chase') {
-    heading = Math.PI; // north up the beach road: ocean left, boardwalk right
-    car.position.set(MAP.roadX, 0, name === 'play' ? 190 : 210);
+    // play: north up the beach road, ocean left, boardwalk right.
+    // chase: east along the downtown Ocean Ave cross street (z=180) — the
+    // shot's own heading/start, so the frame reads as a different district.
+    heading = st.heading ?? Math.PI;
+    car.position.set(st.startX ?? MAP.roadX, 0, st.startZ ?? (name === 'play' ? 190 : 210));
     car.rotation.y = heading;
     S.driving = true;
     player.group.visible = false;
@@ -392,36 +401,43 @@ function placePolice(st) {
   // Police sit at the table's distances from the hero car, in slots the
   // chase camera can actually see: the closest unit flanks just behind the
   // camera line, the rest run ahead in the lanes.
+  // Slots are (fwd, lat) along the chase heading, so the same table stages
+  // the beach-road play shot (heading north) and the downtown chase shot
+  // (heading east) with identical relative geometry.
   const car = hero.group.position;
+  const fwd = forwardVec();
+  const right = rightVec();
   const slots = [
-    { x: MAP.roadX - 8, relZ: -12 },  // closest unit, ahead-left, in frame
-    { x: MAP.roadX + 3.5, relZ: -24 },
-    { x: MAP.roadX + 3.5, relZ: -38 },
-    { x: MAP.roadX, relZ: -55 },
+    { fwd: 12, lat: 8 },   // closest unit, ahead-left, in frame
+    { fwd: 24, lat: -3.5 },
+    { fwd: 38, lat: -3.5 },
+    { fwd: 55, lat: 0 },
   ];
   const rows = st.police.filter((r) => r.call !== 'AIR-1 SKY-1');
   rows.forEach((r, i) => {
     const p = policeCars[i];
-    p.position.set(slots[i].x, 0, car.z + slots[i].relZ);
-    p.userData.relZ = slots[i].relZ;
-    p.userData.laneX = slots[i].x;
+    p.position.set(car.x + fwd.x * slots[i].fwd + right.x * slots[i].lat, 0,
+      car.z + fwd.z * slots[i].fwd + right.z * slots[i].lat);
+    p.userData.relFwd = slots[i].fwd;
+    p.userData.lat = slots[i].lat;
     p.rotation.y = heading;
     p.visible = true;
   });
   // 3+ traffic cars ahead, pinned to the hero car so they stay in frame.
   const tSlots = [
-    { x: MAP.roadX - 3.5, relZ: -20 },
-    { x: MAP.roadX + 3.5, relZ: -32 },
-    { x: MAP.roadX - 3.5, relZ: -46 },
-    { x: MAP.roadX + 3.5, relZ: -60 },
+    { fwd: 20, lat: 3.5 },
+    { fwd: 32, lat: -3.5 },
+    { fwd: 46, lat: 3.5 },
+    { fwd: 60, lat: -3.5 },
   ];
   tSlots.forEach((s, i) => {
     const tr = traffic[i];
-    tr.position.set(s.x, 0, car.z + s.relZ);
+    tr.position.set(car.x + fwd.x * s.fwd + right.x * s.lat, 0,
+      car.z + fwd.z * s.fwd + right.z * s.lat);
     tr.rotation.y = heading;
     tr.userData.staged = true;
-    tr.userData.relZ = s.relZ;
-    tr.userData.laneX = s.x;
+    tr.userData.relFwd = s.fwd;
+    tr.userData.lat = s.lat;
   });
 }
 function placeHeli(off) {
@@ -441,9 +457,14 @@ function syncSpotlight() {
 }
 function placeRoadblocks() {
   const car = hero.group.position;
+  const fwd = forwardVec();
+  const right = rightVec();
   roadblocks.forEach((b, i) => {
-    b.position.set(MAP.roadX - 4 + i * 4, 0.6, car.z - 46 - i * 3);
-    b.userData.relZ = -46 - i * 3;
+    const f = 46 + i * 3, lat = 4 - i * 4;
+    b.position.set(car.x + fwd.x * f + right.x * lat, 0.6,
+      car.z + fwd.z * f + right.z * lat);
+    b.userData.relFwd = f;
+    b.userData.lat = lat;
     b.rotation.y = 0.15 * (i - 1);
     b.visible = true;
   });
@@ -655,24 +676,32 @@ function updateWorld(dt, t) {
     }
   }
   if (shot && (shotName === 'play' || shotName === 'chase')) {
-    // staged chase: the car keeps rolling up the beach road at staged speed;
-    // police, staged traffic and roadblocks stay pinned to it.
-    car.position.z -= S.speed * dt;
+    // staged chase: the car keeps rolling along the shot's heading at staged
+    // speed (north up the beach road for play, east down Ocean Ave for the
+    // downtown chase); police, staged traffic and roadblocks stay pinned
+    // to it in (fwd, lat) slots.
+    const fwd = forwardVec();
+    const right = rightVec();
+    car.position.addScaledVector(fwd, S.speed * dt);
     if (car.position.z < -560) car.position.z = 560;
+    if (car.position.z > 560) car.position.z = -560;
+    if (car.position.x > 470) car.position.x = -220;
+    if (car.position.x < -230) car.position.x = 470;
     car.rotation.y = heading;
     for (const p of policeCars) {
       if (!p.visible) continue;
-      p.position.z = car.position.z + p.userData.relZ;
-      p.position.x = p.userData.laneX;
+      p.position.set(car.position.x + fwd.x * p.userData.relFwd + right.x * p.userData.lat, 0,
+        car.position.z + fwd.z * p.userData.relFwd + right.z * p.userData.lat);
     }
     for (const tr of traffic) {
       if (!tr.userData.staged) continue;
-      tr.position.z = car.position.z + tr.userData.relZ;
-      tr.position.x = tr.userData.laneX;
+      tr.position.set(car.position.x + fwd.x * tr.userData.relFwd + right.x * tr.userData.lat, 0,
+        car.position.z + fwd.z * tr.userData.relFwd + right.z * tr.userData.lat);
     }
     for (const b of roadblocks) {
       if (!b.visible) continue;
-      b.position.z = car.position.z + b.userData.relZ;
+      b.position.set(car.position.x + fwd.x * b.userData.relFwd + right.x * b.userData.lat, 0.6,
+        car.position.z + fwd.z * b.userData.relFwd + right.z * b.userData.lat);
     }
     // keep the staged heli glued above the car
     if (heli.group.visible) {
