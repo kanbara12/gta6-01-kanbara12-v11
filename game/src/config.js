@@ -58,7 +58,7 @@ export const SHOTS = {
   },
   play: {
     job: 2, cash: 3750, rep: 1, done: 1, wanted: 0, elapsed: 72, par: '1:30',
-    speed: 141, heli: true, heliOff: { x: -4, y: 13, z: -30 },
+    speed: 141, heli: true, heliOff: { x: 2, y: 13, z: -26 },
     police: [
       { call: 'SNOOK-12', d: 6, st: 'RESPONDING' },
       { call: 'SNOOK-11', d: 14, st: 'RESPONDING' },
@@ -70,7 +70,7 @@ export const SHOTS = {
   },
   chase: {
     job: 5, cash: 13200, rep: 5, done: 4, wanted: 3, elapsed: 129, par: '2:30',
-    speed: 152, heli: true, heliOff: { x: -3, y: 13.5, z: -32 },
+    speed: 152, heli: true, heliOff: { x: 2, y: 13.5, z: -28 },
     police: [
       { call: 'SNOOK-12', d: 6, st: 'RAMMING' },
       { call: 'SNOOK-11', d: 14, st: 'PURSUIT' },

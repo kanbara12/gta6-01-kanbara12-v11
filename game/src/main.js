@@ -297,7 +297,9 @@ function placeCamera(mode) {
     const up = mode === 'chase' ? 3.2 : 5.0;
     camera.position.copy(car).addScaledVector(fwd, -back).addScaledVector(right, side).add(new THREE.Vector3(0, up, 0));
     // Pan the view toward the ocean (west) so the water is in the frame.
-    camera.lookAt(car.clone().addScaledVector(fwd, 4).addScaledVector(right, -8).add(new THREE.Vector3(0, 1.0, 0)));
+    // Note the sign: for heading PI (north), rightVec points west, so a
+    // positive right offset pans the view west.
+    camera.lookAt(car.clone().addScaledVector(fwd, 10).addScaledVector(right, 6).add(new THREE.Vector3(0, 1.0, 0)));
   } else if (mode === 'foot') {
     const p = player.group.position;
     camera.position.copy(p).addScaledVector(forwardVec(), -4.6).addScaledVector(rightVec(), 2.0).add(new THREE.Vector3(0, 2.3, 0));
