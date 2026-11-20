@@ -1,0 +1,726 @@
+// SUNCOAST: HEATLINE — boot, loop, driving, missions, police, HUD, shots.
+// Plain ES modules, no build step. Runs fully offline on vendored Three.js.
+
+import * as THREE from 'three';
+import { MAP, JOBS, REP_DURING, REP_END, WANTED_DURING, START_CASH, YARD_BOUNTY, LOOP_TOTAL, SHOTS, RADIO, WEAPONS, CREW, fmtClock, money, rng32 } from './config.js';
+import { buildWorld } from './world.js';
+import { makeHeroCar, makeTrafficCar, makePoliceCar, makeHeli, makeWalker, makePlayer, makeYardEnemy } from './vehicles.js';
+import { GameAudio } from './audio.js';
+
+const params = new URLSearchParams(location.search);
+const shotName = params.get('shot');
+const seed = Number(params.get('seed') || 1);
+const shot = shotName ? SHOTS[shotName] : null;
+
+const $ = (id) => document.getElementById(id);
+const errors = [];
+window.addEventListener('error', (e) => errors.push(String(e.message || e.error)));
+window.__errors = errors;
+
+// ---------- state (one consistent object; staging sets it all at once) ----------
+const S = {
+  job: 1, cash: START_CASH, rep: 0, done: 0, wanted: 0, elapsed: 0,
+  speed: 0, speedKmh: 0, fuel: 100, cond: 100, hp: 100,
+  driving: false, started: false, paused: false, hudHidden: false,
+  targetsDown: 0, targetsTotal: 3, drift: 0, driftCash: 0, nearMiss: 0,
+  weapon: 0, radio: 0, playT: 0, complete: false,
+};
+let heading = 0; // radians; 0 = +z (south), PI = -z (north)
+let vel = 0;     // m/s along heading
+let driftT = 0;
+let lastShotT = 0;
+
+const state = () => ({ cash: S.cash, job: S.job, rep: S.rep, done: S.done, wanted: S.wanted, speedKmh: Math.round(S.speedKmh), playT: S.playT, targets: S.targetsDown });
+
+// ---------- renderer / scene ----------
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(1280, 720);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, 1280 / 720, 0.1, 2000);
+
+const world = buildWorld(scene, seed);
+const audio = new GameAudio();
+
+// ---------- actors ----------
+const hero = makeHeroCar();
+hero.group.position.set(MAP.carSpawn.x, 0, MAP.carSpawn.z);
+scene.add(hero.group);
+
+const player = makePlayer();
+player.group.position.set(MAP.playerSpawn.x, 0, MAP.playerSpawn.z);
+scene.add(player.group);
+
+const heli = makeHeli();
+heli.group.visible = false;
+scene.add(heli.group);
+
+const traffic = [];
+{
+  const rnd = rng32(seed + 5);
+  const colors = [0x3a6ea8, 0xc8a03a, 0x7a3a8a, 0x3a8a5a, 0xd8d8d8, 0x8a2a2a, 0x2a2a2a, 0xe08a3a];
+  for (let i = 0; i < 18; i++) {
+    const car = makeTrafficCar(colors[i % colors.length]);
+    const lane = rnd() < 0.5 ? MAP.roadX - 3.5 : MAP.roadX + 3.5;
+    car.position.set(lane + (rnd() - 0.5) * 2, 0, -600 + rnd() * 1200);
+    car.rotation.y = rnd() < 0.5 ? 0 : Math.PI;
+    car.userData.speed = 11 + rnd() * 9;
+    car.userData.dir = car.rotation.y === 0 ? 1 : -1;
+    scene.add(car);
+    traffic.push(car);
+  }
+}
+const policeCars = [];
+for (let i = 0; i < 4; i++) {
+  const p = makePoliceCar();
+  p.visible = false;
+  scene.add(p);
+  policeCars.push(p);
+}
+const walkers = [];
+{
+  const rnd = rng32(seed + 9);
+  const cols = [0xd8d8d8, 0x3a6ea8, 0xc85a5a, 0x5aa87a, 0xe0c85a, 0x8a5ac8];
+  for (let i = 0; i < 20; i++) {
+    const w = makeWalker(cols[i % cols.length]);
+    const side = rnd() < 0.5 ? MAP.roadX - 8 : MAP.roadX + 8;
+    w.group.position.set(side + (rnd() - 0.5) * 3, 0, -560 + rnd() * 1120);
+    w.group.userData = { dir: rnd() < 0.5 ? 1 : -1, speed: 1 + rnd() * 1.2, phase: rnd() * 6, homeX: w.group.position.x };
+    scene.add(w.group);
+    walkers.push(w);
+  }
+}
+const enemies = [];
+{
+  const spots = [[-14, -12], [6, 4], [16, -6]];
+  for (let i = 0; i < 3; i++) {
+    const e = makeYardEnemy(1);
+    e.group.position.set(MAP.yard.x + spots[i][0], 0, MAP.yard.z + spots[i][1]);
+    e.group.rotation.y = Math.PI + (i - 1) * 0.5;
+    e.group.visible = false;
+    scene.add(e.group);
+    enemies.push(e);
+  }
+}
+const roadblocks = [];
+for (let i = 0; i < 3; i++) {
+  const b = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.1, 0.5),
+    new THREE.MeshStandardMaterial({ color: i % 2 ? 0xff5a2a : 0xf2f2f2, roughness: 0.6 }));
+  b.visible = false;
+  scene.add(b);
+  roadblocks.push(b);
+}
+// Drift smoke puffs.
+const smokeTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const r = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+  r.addColorStop(0, 'rgba(220,220,220,0.7)'); r.addColorStop(1, 'rgba(220,220,220,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
+const smokePool = [];
+for (let i = 0; i < 24; i++) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: smokeTex, transparent: true, opacity: 0, depthWrite: false }));
+  s.scale.set(2, 2, 1);
+  scene.add(s);
+  smokePool.push({ s, life: 0 });
+}
+function puff(x, y, z) {
+  const p = smokePool.find((q) => q.life <= 0);
+  if (!p) return;
+  p.s.position.set(x, y, z);
+  p.s.material.opacity = 0.6;
+  p.life = 0.9;
+}
+
+// ---------- input ----------
+const keys = {};
+let mouseDown = false;
+addEventListener('keydown', (e) => {
+  keys[e.code] = true;
+  audio.ensure();
+  if (e.code === 'Enter' && !S.started) startGame();
+  if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  if (e.code === 'KeyH') toggleHud();
+  if (e.code === 'KeyR') { const st = audio.nextStation(); S.radio = audio.station; toast(st.name + ' • ' + st.track); }
+  if (e.code === 'KeyM') toast(audio.toggleMute() ? 'MUTED' : 'SOUND ON');
+  if (e.code === 'KeyE') tryEnterExit();
+  if (e.code >= 'Digit1' && e.code <= 'Digit4') S.weapon = Number(e.code.slice(-1)) - 1;
+  if (e.code === 'KeyZ') crewCall('Rae', 'CLEAN SLATE — heat dropped one star');
+  if (e.code === 'KeyX') crewCall('Sable', 'EYES UP — police positions marked on the map');
+  if (e.code === 'KeyC') crewCall('Marlo', 'PIT STOP — fuel and condition restored');
+});
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+canvas.addEventListener('mousedown', () => { mouseDown = true; if (S.started && !S.driving) shoot(); });
+addEventListener('mouseup', () => { mouseDown = false; });
+$('btnResume').onclick = togglePause;
+$('btnSave').onclick = () => { localStorage.setItem('suncoast-save', JSON.stringify({ job: S.job, cash: S.cash, rep: S.rep, done: S.done })); toast('SAVED'); };
+$('btnLoad').onclick = () => {
+  try {
+    const d = JSON.parse(localStorage.getItem('suncoast-save') || 'null');
+    if (d) { S.job = d.job; S.cash = d.cash; S.rep = d.rep; S.done = d.done; toast('LOADED — JOB ' + S.job + '/8'); }
+  } catch (e) { /* ignore */ }
+};
+
+function crewCall(who, text) {
+  showDialog(who, who === 'Rae' ? 'FIXER' : who === 'Sable' ? 'LOOKOUT' : 'DRIVER', text);
+  if (who === 'Rae' && S.wanted > 0) { S.wanted--; }
+  if (who === 'Marlo') { S.fuel = 100; S.cond = 100; }
+}
+function toast(t) {
+  const el = $('toast');
+  el.textContent = t;
+  el.classList.remove('hidden');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.add('hidden'), 2600);
+}
+function togglePause() {
+  if (!S.started) return;
+  S.paused = !S.paused;
+  $('pause').style.display = S.paused ? 'flex' : 'none';
+  if (S.paused) {
+    $('pauseStats').innerHTML =
+      `MONEY ${money(S.cash)} &nbsp;•&nbsp; JOB ${S.job}/8 &nbsp;•&nbsp; ${S.done} JOBS DONE<br>` +
+      `TARGETS DOWN ${S.targetsDown}/3 &nbsp;•&nbsp; DRIFT EARNINGS ${money(S.driftCash)} &nbsp;•&nbsp; REP ${S.rep}<br>` +
+      `FUEL ${Math.round(S.fuel)}% &nbsp;•&nbsp; WANTED ${'★'.repeat(S.wanted)}${'☆'.repeat(5 - S.wanted)} &nbsp;•&nbsp; HP ${S.hp}`;
+  }
+}
+function toggleHud() {
+  S.hudHidden = !S.hudHidden;
+  $('hud').classList.toggle('hidden', S.hudHidden);
+}
+function startGame() {
+  S.started = true;
+  $('title').style.display = 'none';
+  audio.ensure();
+  toast('JOB 1/8 — A FAVOR IN THE HEAT');
+}
+function tryEnterExit() {
+  if (!S.started || S.paused) return;
+  if (S.driving) {
+    S.driving = false;
+    player.group.position.copy(hero.group.position).add(new THREE.Vector3(2.5, 0, 0));
+    player.group.rotation.y = heading;
+    player.group.visible = true;
+  } else if (hero.group.position.distanceTo(player.group.position) < 6) {
+    S.driving = true;
+    player.group.visible = false;
+    toast('HEATLINE GT — COND ' + Math.round(S.cond) + '%');
+  }
+}
+function showDialog(who, role, text) {
+  $('dialog').classList.remove('hidden');
+  $('dlgPort').textContent = who[0];
+  $('dlgWho').textContent = who + ' • ' + role;
+  $('dlgText').textContent = text;
+}
+function showPopup(text) {
+  const el = $('popup');
+  el.textContent = text;
+  el.classList.remove('hidden');
+  clearTimeout(showPopup._t);
+  showPopup._t = setTimeout(() => el.classList.add('hidden'), 2400);
+}
+
+// ---------- missions ----------
+function job() { return JOBS[S.job - 1]; }
+function markerPos() { return job().at; }
+function completeJob() {
+  const j = job();
+  S.cash += j.pay;
+  S.done = S.job;
+  S.rep = REP_DURING[Math.min(S.job, 8) - 1] + (S.job >= 4 ? 1 : 0);
+  if (S.job === 8) { S.rep = REP_END; S.complete = true; }
+  S.wanted = WANTED_DURING[Math.min(S.job, 8) - 1];
+  audio.pickup();
+  toast(`+$${j.pay.toLocaleString('en-US')} — JOB ${S.job + 1 <= 8 ? S.job + 1 : 8}/8 ${S.job + 1 <= 8 ? JOBS[S.job].title : 'LOOP COMPLETE'}`);
+  if (S.job < 8) { S.job++; S.elapsed = 0; S.targetsDown = 0; }
+  else { showDialog('RAE', 'FIXER', 'Loop closed. Twenty-two four-fifty, clean. Suncoast is ours tonight.'); }
+}
+function checkMarker() {
+  const m = markerPos();
+  const p = S.driving ? hero.group.position : player.group.position;
+  const d = Math.hypot(p.x - m.x, p.z - m.z);
+  if (S.job === 4) return d; // yard job completes by combat, not by the marker
+  if (d < 5) completeJob();
+  return d;
+}
+function shoot() {
+  if (S.driving || !S.started || S.paused) return;
+  audio.gunshot();
+  player.flashMat.opacity = 1;
+  setTimeout(() => { player.flashMat.opacity = 0; }, 90);
+  // Raycast from the camera through the crosshair at the yard enemies.
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera(new THREE.Vector2(0, 0), camera);
+  ray.far = 70;
+  const hits = ray.intersectObjects(enemies.filter((e) => e.group.visible).map((e) => e.group), true);
+  if (hits.length) {
+    let g = hits[0].object;
+    while (g.parent && g.parent !== scene) g = g.parent;
+    const e = enemies.find((x) => x.group === g);
+    if (e) {
+      e.hp = Math.max(0, e.hp - 0.34);
+      e.drawBar(e.hp);
+      if (e.hp <= 0 && e.group.visible) {
+        e.group.visible = false;
+        S.targetsDown++;
+        S.cash += YARD_BOUNTY;
+        showPopup('BOUNTY +$150');
+        audio.pickup();
+        if (S.targetsDown >= 3 && S.job === 4) {
+          $('jobMark').textContent = 'TARGETS 3/3 — SWEEP DONE';
+          setTimeout(() => { if (S.job === 4) completeJob(); }, 900);
+        }
+      }
+    }
+  }
+}
+
+// ---------- camera rigs ----------
+function forwardVec() { return new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading)); }
+function rightVec() { return new THREE.Vector3(Math.cos(heading), 0, -Math.sin(heading)); }
+function placeCamera(mode) {
+  const car = hero.group.position;
+  const fwd = forwardVec();
+  const right = rightVec();
+  if (mode === 'wide') {
+    camera.position.set(-16, 26, 168);
+    camera.lookAt(-78, 6, 100);
+  } else if (mode === 'chase' || mode === 'chaseWide') {
+    const back = mode === 'chase' ? 7 : 11;
+    const side = mode === 'chase' ? 2.4 : 3.6;
+    const up = mode === 'chase' ? 2.8 : 5.2;
+    camera.position.copy(car).addScaledVector(fwd, -back).addScaledVector(right, side).add(new THREE.Vector3(0, up, 0));
+    camera.lookAt(car.clone().addScaledVector(fwd, 9).add(new THREE.Vector3(0, 1.2, 0)));
+  } else if (mode === 'foot') {
+    const p = player.group.position;
+    camera.position.copy(p).addScaledVector(forwardVec(), -4.6).addScaledVector(rightVec(), 1.3).add(new THREE.Vector3(0, 2.3, 0));
+    camera.lookAt(p.clone().addScaledVector(forwardVec(), 12).add(new THREE.Vector3(0, 1.2, 0)));
+  } else if (mode === 'lighthouse') {
+    camera.position.set(-108, 9, -408);
+    camera.lookAt(-146, 7, -468);
+  } else {
+    // live chase camera
+    camera.position.copy(car).addScaledVector(fwd, -7).addScaledVector(right, 2.4).add(new THREE.Vector3(0, 2.8, 0));
+    camera.lookAt(car.clone().addScaledVector(fwd, 9).add(new THREE.Vector3(0, 1.2, 0)));
+  }
+}
+
+// ---------- shot staging ----------
+let camMode = 'live';
+function applyShot(name) {
+  const st = SHOTS[name];
+  if (!st) return;
+  S.job = st.job; S.cash = st.cash; S.rep = st.rep; S.done = st.done;
+  S.wanted = st.wanted; S.elapsed = st.elapsed; S.speedKmh = st.speed; S.speed = st.speed / 3.6;
+  S.started = true;
+  $('title').style.display = 'none';
+  camMode = st.cam;
+  vel = S.speed;
+  const car = hero.group;
+  if (name === 'start') {
+    heading = Math.PI; // facing north, toward the lighthouse
+    car.position.set(-70, 0, 100);
+    car.rotation.y = heading;
+    vel = 0; S.speedKmh = 0; S.speed = 0; // parked at the boardwalk
+    S.driving = true;
+    player.group.visible = false;
+  } else if (name === 'play' || name === 'chase') {
+    heading = Math.PI; // north up the beach road: ocean left, boardwalk right
+    car.position.set(MAP.roadX, 0, name === 'play' ? 190 : 210);
+    car.rotation.y = heading;
+    S.driving = true;
+    player.group.visible = false;
+    placePolice(st);
+    if (st.heli) placeHeli(st.heliOff);
+    if (name === 'chase') placeRoadblocks();
+  } else if (name === 'mission') {
+    heading = Math.PI * 0.75;
+    player.group.position.set(MAP.yard.x - 22, 0, MAP.yard.z - 24);
+    player.group.rotation.y = heading;
+    player.group.visible = true;
+    S.driving = false;
+    car.position.set(MAP.yard.x - 34, 0, MAP.yard.z + 30);
+    car.rotation.y = heading;
+    S.targetsDown = st.targets;
+    enemies.forEach((e) => { e.group.visible = true; });
+    enemies[1].hp = 0.4; enemies[1].drawBar(0.4); // mid-fight: centre hostile already hurt
+    enemies[0].hp = 1; enemies[0].drawBar(1);
+    enemies[2].hp = 0.85; enemies[2].drawBar(0.85);
+  } else if (name === 'end') {
+    heading = Math.PI;
+    car.position.set(-138, 0, -448);
+    car.rotation.y = heading;
+    player.group.position.set(-133, 0, -448);
+    player.group.rotation.y = heading;
+    player.group.visible = true;
+    S.driving = false;
+    S.complete = true;
+    vel = 0; S.speedKmh = 0; S.speed = 0;
+  }
+  if (st.dlg) showDialog(st.dlg.who, st.dlg.role, st.dlg.text);
+  if (st.popup) showPopup(st.popup);
+  // marker follows the staged job
+  world.marker.position.set(markerPos().x, 0, markerPos().z);
+}
+function placePolice(st) {
+  // Police sit at the table's distances from the hero car, on the road.
+  const car = hero.group.position;
+  const rows = st.police.filter((r) => r.call !== 'AIR-1 SKY-1');
+  rows.forEach((r, i) => {
+    const p = policeCars[i];
+    const behind = i % 2 === 0;
+    p.position.set(
+      MAP.roadX + (behind ? -3.5 : 3.5) + (i === 2 ? 4 : 0),
+      0,
+      car.z + (behind ? r.d : -r.d - 6));
+    p.rotation.y = heading;
+    p.visible = true;
+  });
+}
+function placeHeli(off) {
+  const car = hero.group.position;
+  heli.group.position.set(car.x + off.x, Math.max(off.y, 14), car.z + off.z);
+  heli.group.visible = true;
+  heli.cone.visible = true;
+  heli.pool.visible = true;
+  syncSpotlight();
+}
+function syncSpotlight() {
+  // Pool stays on the road under the heli; cone stretches heli -> pool.
+  const y = heli.group.position.y;
+  heli.pool.position.y = 0.6 - y;
+  heli.cone.position.y = (0.6 - y) / 2;
+  heli.cone.scale.y = (y - 0.6) / 13;
+}
+function placeRoadblocks() {
+  const car = hero.group.position;
+  roadblocks.forEach((b, i) => {
+    b.position.set(MAP.roadX - 4 + i * 4, 0.6, car.z - 46 - i * 3);
+    b.rotation.y = 0.15 * (i - 1);
+    b.visible = true;
+  });
+}
+
+// ---------- HUD ----------
+function updateHud(dt) {
+  const j = job();
+  if (S.complete && shotName === 'end') {
+    $('jobTitle').textContent = 'STORY LOOP COMPLETE';
+    $('jobObj').textContent = 'North Light done — the loop is closed';
+    $('jobNext').textContent = 'NEXT: —';
+    $('jobMark').textContent = 'LOOP COMPLETE • $22,450';
+    $('jobTimer').textContent = '8 JOBS DONE • REP 10';
+  } else {
+    $('jobTitle').textContent = `JOB ${S.job}/8 • ${j.title}`;
+    $('jobObj').textContent = j.goal;
+    $('jobNext').textContent = S.job < 8 ? 'NEXT: ' + JOBS[S.job].title : 'NEXT: LOOP COMPLETE';
+    if (S.job === 4) {
+      $('jobMark').textContent = `TARGETS ${S.targetsDown}/3`;
+    } else {
+      const m = markerPos();
+      const p = S.driving ? hero.group.position : player.group.position;
+      $('jobMark').textContent = 'MARKER ' + Math.round(Math.hypot(p.x - m.x, p.z - m.z)) + ' m';
+    }
+    $('jobTimer').textContent = `${fmtClock(S.elapsed)} / PAR ${shot ? SHOTS[shotName].par : j.par}`;
+  }
+  $('cash').textContent = money(S.cash);
+  $('hpRep').textContent = `HP ${S.hp}  •  REP ${S.rep}`;
+  $('repfill').style.width = Math.min(100, S.rep * 10) + '%';
+  let stars = '';
+  for (let i = 0; i < 5; i++) stars += i < S.wanted ? '★' : '<span class="off">☆</span>';
+  $('stars').innerHTML = stars;
+  const policeOn = S.wanted > 0 || (shot && SHOTS[shotName].police.length > 0);
+  $('policeLine').textContent = policeOn ? 'POLICE: IN SIGHT' : 'POLICE: CLEAR';
+  // Named police panel: live distances from the actual car positions.
+  const panel = $('police');
+  const rows = $('policeRows');
+  if (policeOn) {
+    panel.classList.remove('hidden');
+    const car = hero.group.position;
+    let html = '';
+    if (shot) {
+      for (const r of SHOTS[shotName].police) {
+        html += `<div class="row"><span>${r.call}</span><b>${r.d}m</b><span>${r.st}</span></div>`;
+      }
+    } else {
+      const live = policeCars.filter((p) => p.visible).map((p, i) => ({
+        call: ['SNOOK-12', 'SNOOK-11', 'SNOOK-13', 'SNOOK-14'][i],
+        d: Math.round(p.position.distanceTo(car)),
+        st: p.position.distanceTo(car) < 10 ? 'RAMMING' : 'PURSUIT',
+      }));
+      if (heli.group.visible) live.push({ call: 'AIR-1 SKY-1', d: Math.round(heli.group.position.distanceTo(car)), st: 'SPOTLIGHT' });
+      for (const r of live) html += `<div class="row"><span>${r.call}</span><b>${r.d}m</b><span>${r.st}</span></div>`;
+    }
+    rows.innerHTML = html;
+  } else {
+    panel.classList.add('hidden');
+  }
+  $('radioName').textContent = RADIO[S.radio].name;
+  $('radioTrack').textContent = RADIO[S.radio].track;
+  let wHtml = '';
+  WEAPONS.forEach((w, i) => { wHtml += `<span class="w${i === S.weapon ? ' on' : ''}">${i + 1} ${w}</span>`; });
+  $('weapons').innerHTML = wHtml;
+  $('abilities').innerHTML = CREW.map((c) => `<div><span class="k">${c.key}</span><span class="disc">${c.who}</span>${c.name} ${c.ab} — READY</div>`).join('');
+  $('speed').innerHTML = `${Math.round(S.speedKmh)} <small>km/h</small>`;
+  $('fuelPct').textContent = Math.round(S.fuel) + '%';
+  $('fuelFill').style.width = S.fuel + '%';
+  $('condPct').textContent = Math.round(S.cond) + '%';
+  $('condFill').style.width = S.cond + '%';
+  $('carLabel').textContent = `HEATLINE GT — COND ${Math.round(S.cond)}%`;
+  $('cross').classList.toggle('hidden', S.driving);
+  const district = S.job === 4 ? 'INDUSTRIAL • Yard Rd' : Math.abs(hero.group.position.x - MAP.roadX) < 20 ? 'BEACHFRONT • Beachfront Rd' : 'DOWNTOWN • Ocean Ave';
+  const tod = shotName === 'chase' ? 'DUSK' : shotName === 'end' ? 'LAST LIGHT' : 'GOLDEN';
+  $('mapLabel').innerHTML = `${district}<br>${tod} • ${S.done} JOBS DONE`;
+  drawMinimap();
+}
+function drawMinimap() {
+  const c = $('minimap');
+  const g = c.getContext('2d');
+  const W = 150, H = 150;
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = '#1c2430'; g.beginPath(); g.arc(75, 75, 74, 0, 7); g.fill();
+  g.save();
+  g.beginPath(); g.arc(75, 75, 74, 0, 7); g.clip();
+  const toMap = (x, z) => [75 + (x / 600) * 72, 75 + (z / 600) * 72];
+  g.fillStyle = '#1d4e6e'; g.fillRect(0, 0, 22, 150); // ocean strip
+  g.fillStyle = '#d9b380'; g.fillRect(20, 0, 8, 150); // sand
+  g.strokeStyle = '#666'; g.lineWidth = 4;
+  g.beginPath(); g.moveTo(...toMap(MAP.roadX, -600)); g.lineTo(...toMap(MAP.roadX, 600)); g.stroke();
+  g.strokeStyle = '#555'; g.lineWidth = 3;
+  for (const z of [-360, -180, 0, 180, 360]) {
+    g.beginPath(); g.moveTo(...toMap(-200, z)); g.lineTo(...toMap(500, z)); g.stroke();
+  }
+  const m = markerPos();
+  const [mx, my] = toMap(m.x, m.z);
+  g.fillStyle = '#ffd23e';
+  g.beginPath(); g.arc(mx, my, 4 + Math.sin(S.playT * 4) * 1.5, 0, 7); g.fill();
+  g.fillStyle = '#ff3b30';
+  for (const p of policeCars.filter((x) => x.visible)) {
+    const [px, py] = toMap(p.position.x, p.position.z);
+    g.beginPath(); g.arc(px, py, 3, 0, 7); g.fill();
+  }
+  const car = hero.group.position;
+  const [cx, cy] = toMap(car.x, car.z);
+  g.fillStyle = '#ffd23e';
+  g.save();
+  g.translate(cx, cy); g.rotate(Math.atan2(Math.sin(heading), Math.cos(heading)) + Math.PI);
+  g.beginPath(); g.moveTo(0, -6); g.lineTo(4, 5); g.lineTo(-4, 5); g.closePath(); g.fill();
+  g.restore();
+  g.restore();
+}
+
+// ---------- main loop ----------
+const clock = new THREE.Clock();
+let fpsFrames = 0, fpsT = 0, fpsVal = 0;
+window.__fps = () => fpsVal;
+let readySent = false;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+  if (!S.paused) {
+    S.playT += dt;
+    if (S.started && !shot) S.elapsed += dt;
+    if (shot) S.elapsed = SHOTS[shotName].elapsed + S.playT;
+    world.animate(t, dt);
+    updateWorld(dt, t);
+    updateHud(dt);
+  }
+  renderer.render(scene, camera);
+  fpsFrames++; fpsT += dt;
+  if (fpsT >= 1) { fpsVal = Math.round(fpsFrames / fpsT); fpsFrames = 0; fpsT = 0; }
+  if (!readySent && S.playT > 0.5) {
+    readySent = true;
+    window.__ready = true;
+    window.__suncoast = { shot: shotName, state, ready: true };
+  }
+}
+
+function updateWorld(dt, t) {
+  const car = hero.group;
+  // --- driving / walking ---
+  if (S.started && !shot) {
+    if (S.driving) {
+      const accel = keys.KeyW || keys.ArrowUp ? 14 : 0;
+      const brake = keys.KeyS || keys.ArrowDown ? 22 : 0;
+      vel += (accel - brake) * dt;
+      vel -= vel * 0.55 * dt; // drag
+      if (keys.KeyS && vel < 0.5) vel = Math.max(vel - 6 * dt, -6);
+      vel = Math.max(-8, Math.min(vel, 55));
+      const steer = (keys.KeyA || keys.ArrowLeft ? 1 : 0) - (keys.KeyD || keys.ArrowRight ? 1 : 0);
+      const steerAmt = steer * 1.5 * dt * Math.min(1, Math.abs(vel) / 8) * Math.sign(vel || 1);
+      heading += steerAmt;
+      // drift: Space while steering hard at speed
+      const drifting = keys.Space && Math.abs(vel) > 14 && steer !== 0;
+      if (drifting) {
+        driftT += dt;
+        puff(car.position.x - Math.sin(heading) * 1.4, 0.4, car.position.z - Math.cos(heading) * 1.4);
+        hero.parts.brakeMat.emissiveIntensity = 2.2;
+        if (driftT > 1.2) {
+          S.drift++;
+          driftT = 0;
+          const gain = 50 * S.drift;
+          S.cash += gain; S.driftCash += gain;
+          showPopup(`DRIFT x${S.drift} +$${gain}`);
+        }
+      } else {
+        driftT = 0;
+        hero.parts.brakeMat.emissiveIntensity = brake ? 2.2 : 0.7;
+      }
+      car.position.x += Math.sin(heading) * vel * dt;
+      car.position.z += Math.cos(heading) * vel * dt;
+      car.position.x = Math.max(-160, Math.min(480, car.position.x));
+      car.position.z = Math.max(-580, Math.min(580, car.position.z));
+      car.rotation.y = heading;
+      // near-miss: fast pass next to traffic
+      for (const tr of traffic) {
+        const d = Math.hypot(tr.position.x - car.position.x, tr.position.z - car.position.z);
+        if (d < 4.5 && Math.abs(vel) > 22 && !tr.userData.nm) {
+          tr.userData.nm = true;
+          S.cash += 50; S.nearMiss++;
+          showPopup('NEAR MISS +$50');
+          setTimeout(() => { tr.userData.nm = false; }, 4000);
+        }
+      }
+      S.speedKmh = Math.abs(vel) * 3.6;
+      S.fuel = Math.max(0, S.fuel - dt * 0.15);
+      audio.setEngine(S.speedKmh, true);
+      checkMarker();
+    } else {
+      // on foot
+      const sp = 6;
+      const f = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0);
+      const r = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+      player.group.position.x += (Math.sin(heading) * f + Math.cos(heading) * r) * sp * dt;
+      player.group.position.z += (Math.cos(heading) * f - Math.sin(heading) * r) * sp * dt;
+      player.group.rotation.y = heading;
+      const swing = Math.sin(t * 9) * 0.5 * (f || r ? 1 : 0);
+      player.legL.rotation.x = swing;
+      player.legR.rotation.x = -swing;
+      S.speedKmh = 0;
+      audio.setEngine(0, false);
+      checkMarker();
+    }
+  }
+  if (shot && (shotName === 'play' || shotName === 'chase')) {
+    // staged chase: the car keeps rolling up the beach road at staged speed
+    car.position.z -= S.speed * dt;
+    if (car.position.z < -560) car.position.z = 560;
+    car.rotation.y = heading;
+    for (let i = 0; i < policeCars.length; i++) {
+      const p = policeCars[i];
+      if (!p.visible) continue;
+      p.position.z -= S.speed * dt * 0.98;
+      if (p.position.z < -560) p.position.z = 560;
+    }
+    // keep the staged heli glued above the car
+    if (heli.group.visible) {
+      heli.group.position.x = car.position.x + SHOTS[shotName].heliOff.x;
+      heli.group.position.z = car.position.z + SHOTS[shotName].heliOff.z;
+      heli.group.position.y = Math.max(SHOTS[shotName].heliOff.y, 14);
+      syncSpotlight();
+    }
+    S.speedKmh = S.speed * 3.6;
+  }
+  if (shotName === 'mission') {
+    // staged fire: a shot every ~1.4 s so the muzzle flash is live in frame
+    if (t - lastShotT > 1.4) {
+      lastShotT = t;
+      player.flashMat.opacity = 1;
+      audio.gunshot();
+      setTimeout(() => { player.flashMat.opacity = 0; }, 110);
+      const e = enemies[1];
+      if (e.hp > 0.25) { e.hp = Math.max(0.25, e.hp - 0.05); e.drawBar(e.hp); }
+    }
+  }
+  // --- traffic loops along the road ---
+  for (const tr of traffic) {
+    tr.position.z += tr.userData.dir * tr.userData.speed * dt;
+    if (tr.position.z > 620) tr.position.z = -620;
+    if (tr.position.z < -620) tr.position.z = 620;
+    // keep traffic out of the staged chase lane near the hero car
+    if (shot && Math.abs(tr.position.z - car.position.z) < 12 && Math.abs(tr.position.x - car.position.x) < 6) {
+      tr.position.x += (tr.position.x > car.position.x ? 1 : -1) * 6;
+    }
+  }
+  // --- walkers: stroll, scatter from the speeding car ---
+  for (const w of walkers) {
+    const g = w.group;
+    const dCar = Math.hypot(g.position.x - car.position.x, g.position.z - car.position.z);
+    if (dCar < 7 && S.speedKmh > 25) {
+      g.position.x += (g.position.x > car.position.x ? 1 : -1) * 6 * dt;
+      g.rotation.y = g.position.x > car.position.x ? Math.PI / 2 : -Math.PI / 2;
+    } else {
+      g.position.z += g.userData.dir * g.userData.speed * dt;
+      if (g.position.z > 580 || g.position.z < -580) g.userData.dir *= -1;
+      g.rotation.y = g.userData.dir > 0 ? 0 : Math.PI;
+    }
+    const sw = Math.sin(t * 7 + g.userData.phase) * 0.45;
+    w.armL.rotation.x = sw; w.armR.rotation.x = -sw;
+    w.legL.rotation.x = -sw; w.legR.rotation.x = sw;
+  }
+  // --- police: live pursuit when wanted, parked otherwise ---
+  if (!shot) {
+    const want = S.wanted > 0;
+    heli.group.visible = want && S.wanted >= 3;
+    policeCars.forEach((p, i) => {
+      p.visible = want;
+      if (!want) return;
+      const target = car.position;
+      const dx = target.x - p.position.x, dz = target.z - p.position.z;
+      const d = Math.hypot(dx, dz) || 1;
+      const sp = 16 + i * 1.5;
+      p.position.x += (dx / d) * sp * dt;
+      p.position.z += (dz / d) * sp * dt;
+      p.rotation.y = Math.atan2(dx, dz);
+      if (d < 9) { /* ramming range: hold close */ }
+    });
+    if (heli.group.visible) {
+      const a = t * 0.35;
+      heli.group.position.set(
+        car.position.x + Math.cos(a) * 38,
+        16 + Math.sin(t * 0.5) * 1.5,
+        car.position.z + Math.sin(a) * 38);
+      heli.group.rotation.y = -a;
+      syncSpotlight();
+    }
+  }
+  if (heli.group.visible) {
+    heli.rotor.rotation.y += dt * 22;
+    heli.tailRotor.rotation.x += dt * 30;
+    // spotlight cone swings gently over the car
+    heli.cone.rotation.z = Math.sin(t * 0.6) * 0.12;
+  }
+  // --- smoke puffs fade ---
+  for (const p of smokePool) {
+    if (p.life > 0) {
+      p.life -= dt;
+      p.s.material.opacity = Math.max(0, p.life * 0.6);
+      p.s.position.y += dt * 1.2;
+      p.s.scale.setScalar(2 + (0.9 - p.life) * 3);
+    }
+  }
+  // --- camera ---
+  if (shot) placeCamera(camMode);
+  else if (S.driving) placeCamera('live');
+  else {
+    const p = player.group.position;
+    camera.position.copy(p).addScaledVector(forwardVec(), -4.6).addScaledVector(rightVec(), 1.3).add(new THREE.Vector3(0, 2.3, 0));
+    camera.lookAt(p.clone().addScaledVector(forwardVec(), 12).add(new THREE.Vector3(0, 1.2, 0)));
+  }
+  hero.parts.wheels.forEach((w) => { w.rotation.x += (S.speedKmh / 3.6) * dt * 2.4; });
+}
+
+// ---------- boot ----------
+if (shot) {
+  applyShot(shotName);
+} else {
+  world.marker.position.set(markerPos().x, 0, markerPos().z);
+}
+animate();
