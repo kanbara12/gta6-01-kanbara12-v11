@@ -29,6 +29,7 @@ let heading = 0; // radians; 0 = +z (south), PI = -z (north)
 let vel = 0;     // m/s along heading
 let driftT = 0;
 let lastShotT = 0;
+let popupTick = -1;
 
 const state = () => ({ cash: S.cash, job: S.job, rep: S.rep, done: S.done, wanted: S.wanted, speedKmh: Math.round(S.speedKmh), playT: S.playT, targets: S.targetsDown });
 
@@ -672,8 +673,10 @@ function updateWorld(dt, t) {
     world.glitter.position.z = car.position.z - 10;
     S.speedKmh = S.speed * 3.6;
     // the drift popup must still be on screen at capture time: re-show it
-    // on wall-clock time, since game time runs slower than real time here
-    if (shotName === 'chase' && Math.floor(t / 2.5) !== Math.floor((t - dt) / 2.5)) {
+    // on wall-clock time, tracking the last tick (frame steps are coarse,
+    // so a boundary comparison against dt would skip most ticks)
+    if (shotName === 'chase' && Math.floor(t / 2.5) !== popupTick) {
+      popupTick = Math.floor(t / 2.5);
       showPopup('DRIFT x3 +$150');
     }
   }
